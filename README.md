@@ -8,6 +8,6 @@ An enhancement to Asshar Farhan's Raduino software for the BitX40 transceiver. T
 
 3. Implemented a 'tuning lock' using function button 2 
  
-This is very much a work in progress and many features are currently untested. The code is built using interrupts to avoid the problems of having delays in the main loop(). Many thanks to Don for his great blog posts, original code and helpful support via email.
+This is very much a work in progress and many features are currently untested. The code is built using interrupts to avoid the problems of having delays in the main loop(). Many thanks to Don for his great blog posts, original code and helpful support via email and, of course, many thanks to Asshar for creating a cheap and hackable radio kit ! 
 
 Andrew Whaley

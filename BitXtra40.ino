@@ -1,6 +1,7 @@
 #include <si5351.h>
 
-#define DEBUG
+// Do we want the inverted display
+//#define UPSIDE_DOWN 
 
 /**
  * This source file is under General Public License version 3.
@@ -267,45 +268,64 @@ void printLine2(char *c){
 void updateDisplay()
 {
     int i, smi, smp;
-    sprintf(b, "%08ld", frequency);      
-    //sprintf(c, "%s:%.2s.%.4s", vfoActive == VFO_A ? "A" : "B" , b,  b+2);
-    sprintf(c, "%.2s.%.4s", b,  b+2);
+    printFrequency(c, frequency);     
 
+#ifdef UPSIDE_DOWN
+    lcd.setCursor(0,1);
+#else
+    lcd.setCursor(8,0);
+#endif
+    lcd.print(c);
+
+/*
     if (cw_on)
       strcat(c, " CW ");
     else if (isUSB)
       strcat(c, " USB");
     else
       strcat(c, " LSB");
+*/
+#ifdef UPSIDE_DOWN
+    lcd.setCursor(13,1);
+#else
+    lcd.setCursor(0,0);
+#endif
 
-    if (tuning_lock) strcat(c, " (+)");
-    else strcat(c, " ( )");
-      
-    if (inTx)
-      strcat(c, " TX");
-    else if (ritOn)
-      strcat(c, " +R");
-    else
-      strcat(c, "   ");
+    lcd.print("(");
+    if (cw_on) lcd.print((char) 0xff);
+    else if (tuning_lock) lcd.print("+");
+    else lcd.print(" ");
+    lcd.print(")");
 
     // Signal meter
-    lcd.setCursor(0,1);
-    
-    if (sm > 110) sm = 110;
+    if (sm > 120) sm = 120;
     smi = sm / 10;
-    smp = peak_sm / 10;
+    smp = peak_sm / 10;    
+#ifdef UPSIDE_DOWN
+    lcd.setCursor(2,0);
     lcd.print("[");
-    for (i=0; i<smi-1; i++) lcd.print(":");
-    if (sm-(smi*10) > 4) lcd.print(":");
-    else lcd.print((char) 0b10100101);
-    for (i=smi; i<10; i++) 
+    for (i=11; i>=smi+1; i--) 
+    {
+       if (i == smp) lcd.print("|");
+       else lcd.print(" ");
+    }
+    if (sm-(smi*10) > 4) lcd.print((char) 0x0);
+    else lcd.print((char) 0x6);
+    for (i=0; i<smi; i++) lcd.print((char) 0x0);
+    lcd.print("]");
+#else
+    lcd.setCursor(0,1);
+    lcd.print("[");
+    for (i=0; i<smi; i++) lcd.print((char) 0x0);
+    if (sm-(smi*10) > 4) lcd.print((char) 0x0);
+    else lcd.print((char) 0x6);
+    for (i=smi+1; i<12; i++) 
     {
        if (i == smp) lcd.print("|");
        else lcd.print(" ");
     }
     lcd.print("]");
-          
-    printLine1(c);
+#endif
 }
 
 
@@ -604,13 +624,17 @@ void doTuning(){
  * Just in case the LCD display doesn't work well, the debug log is dumped on the serial monitor
  * Choose Serial Monitor from Arduino IDE's Tools menu to see the Serial.print messages
  */
+
+ 
 void setup()
 {
   int32_t cal;
+
+  setupUpsideDown();
   
   lcd.begin(16, 2);
   printBuff[0] = 0;
-  printLine1("Raduino 1.01bX"); 
+  printLine1("              "); 
   printLine2("              "); 
     
   // Start serial and initialize the Si5351

@@ -116,13 +116,15 @@ void setupUpsideDown()
   lcd.createChar(3, three);
   lcd.createChar(4, four);
   lcd.createChar(5, five);
+  lcd.createChar(6, half_bar);
   // We can use an inverted 9 as a 6
   lcd.createChar(7, seven);
   // 8 can be used as is
   // We can use an inverted 6 as a 9
-#endif
 
+#else
   lcd.createChar(6, half_bar);
+#endif
 }
 
 
@@ -131,7 +133,7 @@ void setupUpsideDown()
 void printFrequency(char * buffer, unsigned long f)
 {
    int i;
-   char b[9];
+   char b[10];
    sprintf(b, "%08ld", frequency); 
    
 #ifdef UPSIDE_DOWN

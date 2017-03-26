@@ -1,7 +1,7 @@
 #include <si5351.h>
 
 // Do we want the inverted display
-//#define UPSIDE_DOWN 
+#define UPSIDE_DOWN 
 
 /**
  * This source file is under General Public License version 3.
@@ -79,7 +79,8 @@ int sm;  // Signal meter
 volatile int peak_sm = 0;
 int wpm = 18; // Read from a pot on Don's setup
 int p ;         //Timing period (milliseconds) for keyer function
-int offset=700; // CW offset
+int offset=750; // CW offset
+int started_cw_tone = 0;
 volatile int cw_on = 0;
 volatile int tuning_lock = 0;
 volatile unsigned long last_interrupt_time_digital = 0L;
@@ -176,7 +177,6 @@ unsigned char serial_in_count = 0;
 #define TAP_UP_MILLIS (500)
 #define TAP_DOWN_MILLIS (600)
 #define TAP_HOLD_MILLIS (2000)
-#define CW_TIMEOUT (600l) // in milliseconds, this is the parameter that determines how long the tx will hold between cw key downs
 
 /**
  * The Raduino supports two VFOs : A and B and receiver incremental tuning (RIT). 
@@ -189,7 +189,7 @@ unsigned char serial_in_count = 0;
 #define VFO_B 1
 char ritOn = 0;
 char vfoActive = VFO_A;
-unsigned long vfoA=7100000L, vfoB=14200000L, ritA, ritB, sideTone=700;
+unsigned long vfoA=7100000L, vfoB=14200000L, ritA, ritB, sideTone=800;
 
 /**
  * Raduino needs to keep track of current state of the transceiver. These are a few variables that do it
@@ -257,6 +257,25 @@ void printLine2(char *c){
   lcd.print(c);
 }
 
+// returns a logarithmic scale from the raw signal voltage on the scale 0 - 23
+int logscale(int s)
+{
+   if (s <= 10) return s;
+   if (s <= 12) return 11;
+   if (s <= 15) return 12;
+   if (s <= 19) return 13;
+   if (s <= 23) return 14;
+   if (s <= 29) return 15;
+   if (s <= 37) return 16;
+   if (s <= 46) return 17;
+   if (s <= 58) return 18;
+   if (s <= 72) return 19;
+   if (s <= 91) return 20;
+   if (s <= 113) return 21;
+   if (s <= 142) return 22;
+   return 23;
+}
+
 /**
  * Building upon the previous  two functions, 
  * update Display paints the first line as per current state of the radio
@@ -277,14 +296,6 @@ void updateDisplay()
 #endif
     lcd.print(c);
 
-/*
-    if (cw_on)
-      strcat(c, " CW ");
-    else if (isUSB)
-      strcat(c, " USB");
-    else
-      strcat(c, " LSB");
-*/
 #ifdef UPSIDE_DOWN
     lcd.setCursor(13,1);
 #else
@@ -298,9 +309,8 @@ void updateDisplay()
     lcd.print(")");
 
     // Signal meter
-    if (sm > 120) sm = 120;
-    smi = sm / 10;
-    smp = peak_sm / 10;    
+    smi = sm / 2;
+    smp = peak_sm / 2;    
 #ifdef UPSIDE_DOWN
     lcd.setCursor(2,0);
     lcd.print("[");
@@ -309,16 +319,16 @@ void updateDisplay()
        if (i == smp) lcd.print("|");
        else lcd.print(" ");
     }
-    if (sm-(smi*10) > 4) lcd.print((char) 0x0);
-    else lcd.print((char) 0x6);
+    if (sm%2==1) lcd.print((char) 0x6);
+    else lcd.print(" ");
     for (i=0; i<smi; i++) lcd.print((char) 0x0);
     lcd.print("]");
 #else
     lcd.setCursor(0,1);
     lcd.print("[");
     for (i=0; i<smi; i++) lcd.print((char) 0x0);
-    if (sm-(smi*10) > 4) lcd.print((char) 0x0);
-    else lcd.print((char) 0x6);
+    if (sm%2==1) lcd.print((char) 0x6);
+    else lcd.print(" ");
     for (i=smi+1; i<12; i++) 
     {
        if (i == smp) lcd.print("|");
@@ -345,7 +355,7 @@ ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
     unsigned long now = millis();
     
     // Function Button 2 is tuning lock - toggle
-    if ((digitalRead(FBUTTON_2) == LOW) && ((last_interrupt_time_digital - now) > 50L))
+    if ((digitalRead(FBUTTON_2) == LOW) && ((now - last_interrupt_time_digital) > 50L))
     {
        if (tuning_lock) tuning_lock = 0;
        else tuning_lock = 1;
@@ -356,6 +366,8 @@ ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
     // CW Key - straight
     if (digitalRead(CW_KEY_DOT) == LOW)  // Key down
     {
+       Serial.println("Key down");
+       
        cli();
        if (!cw_on)
        {
@@ -365,19 +377,24 @@ ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
        }
 
        // Output modulation frequency
-       si5351.set_freq((frequency-offset) * 100 , SI5351_CLK1);
        tone(CW_TONE, offset); //Sidetone
+       last_cw = now;
        sei();
+       si5351.output_enable(SI5351_CLK1, 1); // Unkey transmit 
     }
     else if (cw_on)  // Key up
     {
+       Serial.println("Key up");
        // Silence
-       cli();
-       si5351.output_enable(SI5351_CLK1, 0); // Unkey transmit
+        
+       cli(); 
        noTone(CW_TONE); 
-       sei();
        last_cw = now;
+       sei();
+       si5351.output_enable(SI5351_CLK1, 0); // Unkey transmit 
+       
     }
+   
 }  
 
 
@@ -467,7 +484,7 @@ void setFrequency(unsigned long f){
   else{
     si5351.set_freq((bfo_freq - f) * 100ULL, SI5351_CLK2);
   }
-
+  
   frequency = f;
 }
 
@@ -703,20 +720,30 @@ void loop()
   }
   */
 
-  // Have we finished CW ?
-  if ((cw_on) && ((last_cw - now) > CW_TIMEOUT))
+  if ((cw_on) && (!started_cw_tone))
+  {
+     si5351.set_freq((frequency-offset) * 100ULL, SI5351_CLK1);
+     started_cw_tone = 1;
+  }
+
+
+  // Have we finished CW ?  
+  if ((cw_on) && ((now - last_cw) > CW_TIMEOUT) && (digitalRead(CW_KEY_DOT) == HIGH))
   {
       // Switch off transmitter
       cli();
       digitalWrite(TX_RX, LOW);
-      cw_on = 0;
+      Serial.println("CW off");
+      cw_on = 0;      
+      started_cw_tone = 0;
       sei();
   }
+
 
   if (!tuning_lock) doTuning();
 
   // Read signal level
-  sm = analogRead(SMETER);  
+  sm = logscale(analogRead(SMETER));  
   if (sm > peak_sm) peak_sm = sm;
   updateDisplay();
   

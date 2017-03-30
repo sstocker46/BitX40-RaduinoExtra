@@ -19,7 +19,7 @@ byte two[8] = {
   B00010,
   B00100,
   B01000,
-  B10001,
+  B10000,
   B10001,
   B01110,
   B00000
@@ -63,7 +63,7 @@ byte seven[8] = {
   B00100,
   B00100,
   B01000,
-  B10000,
+  B01000,
   B10000,
   B11111,
   B00000
@@ -108,6 +108,7 @@ byte half_bar[8] = {
 
 void setupUpsideDown() 
 {
+  lcd.noDisplay();
   lcd.createChar(0, bar);
 #ifdef UPSIDE_DOWN
   // We'll reuse zero as is
@@ -125,6 +126,7 @@ void setupUpsideDown()
 #else
   lcd.createChar(6, half_bar);
 #endif
+  lcd.display();
 }
 
 

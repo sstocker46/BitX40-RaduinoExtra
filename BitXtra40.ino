@@ -363,6 +363,7 @@ ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
        last_interrupt_time_digital = now;
     }
 
+/*
     // CW Key - straight
     if (digitalRead(CW_KEY_DOT) == LOW)  // Key down
     {
@@ -394,7 +395,7 @@ ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
        si5351.output_enable(SI5351_CLK1, 0); // Unkey transmit 
        
     }
-   
+   */
 }  
 
 
@@ -650,9 +651,8 @@ void setup()
   setupUpsideDown();
   
   lcd.begin(16, 2);
+  lcd.clear();
   printBuff[0] = 0;
-  printLine1("              "); 
-  printLine2("              "); 
     
   // Start serial and initialize the Si5351
   Serial.begin(9600);
@@ -669,8 +669,8 @@ void setup()
   pinMode(FBUTTON_2, INPUT_PULLUP);
   
   // Setup interrupt handler for the buttons
-  pciSetup(CW_KEY_DOT);
-  pciSetup(CW_KEY_DASH);
+  //pciSetup(CW_KEY_DOT);
+  //pciSetup(CW_KEY_DASH);
   pciSetup(FBUTTON_2);
       
   pinMode(CW_TONE, OUTPUT);
@@ -699,6 +699,24 @@ void setup()
   delay(10);
 }
 
+void sk() {  //Straight Key mode
+
+  digitalWrite(TX_RX,HIGH);
+  
+  while (count < 2000) { // Delay time after last action to return to normal SSB
+    while(digitalRead(CW_KEY_DOT)==LOW){
+      si5351.set_freq((frequency-offset) * 100 , SI5351_CLK1); //Key down
+      tone(6,offset); //Sidetone     
+      count=0; //Reset counter
+    }
+  
+    {si5351.output_enable(SI5351_CLK1, 0); // Unkey transmit
+     noTone(6);}  
+    count++; 
+  }
+  count=0; //Reset counter
+}
+
 void loop()
 {
    unsigned long now = millis();
@@ -719,10 +737,11 @@ void loop()
     return;
   }
   */
-
+/*
   if ((cw_on) && (!started_cw_tone))
   {
      si5351.set_freq((frequency-offset) * 100ULL, SI5351_CLK1);
+     si5351.output_enable(SI5351_CLK2, 0);
      started_cw_tone = 1;
   }
 
@@ -737,8 +756,19 @@ void loop()
       cw_on = 0;      
       started_cw_tone = 0;
       sei();
+      si5351.output_enable(SI5351_CLK2, 1);
+  } */
+  
+  if (digitalRead(CW_KEY_DOT) == LOW) 
+  { 
+    si5351.output_enable(SI5351_CLK2, 0);
+    cw_on = 1;
+    updateDisplay();
+    sk();
+    cw_on = 0;
   }
-
+  digitalWrite(TX_RX, LOW); // Restore T/R relays from CW mode
+  si5351.output_enable(SI5351_CLK2, 1);
 
   if (!tuning_lock) doTuning();
 

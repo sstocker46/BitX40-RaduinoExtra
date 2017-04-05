@@ -84,7 +84,7 @@ int started_cw_tone = 0;
 volatile int cw_on = 0;
 volatile int tuning_lock = 0;
 volatile unsigned long last_interrupt_time_digital = 0L;
-volatile unsigned long last_cw = 0L;
+volatile unsigned int need_update = 0;
 
 unsigned char serial_in_count = 0;
 
@@ -223,8 +223,8 @@ unsigned long bfo_freq = 11998000L;
 int  old_knob = 0;
 
 #define CW_TIMEOUT (750l)
-#define LOWEST_FREQ  (6995000l)
-#define HIGHEST_FREQ (7500000l)
+#define LOWEST_FREQ  (7000000l)
+#define HIGHEST_FREQ (7250000l)
 
 long frequency, stepSize=100000;
 
@@ -361,48 +361,16 @@ ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
        else tuning_lock = 1;
        peak_sm = 0;
        last_interrupt_time_digital = now;
+       need_update = 1;
     }
-
-/*
-    // CW Key - straight
-    if (digitalRead(CW_KEY_DOT) == LOW)  // Key down
-    {
-       Serial.println("Key down");
-       
-       cli();
-       if (!cw_on)
-       {
-          // switch on transmitter 
-          digitalWrite(TX_RX, HIGH);  
-          cw_on = 1;
-       }
-
-       // Output modulation frequency
-       tone(CW_TONE, offset); //Sidetone
-       last_cw = now;
-       sei();
-       si5351.output_enable(SI5351_CLK1, 1); // Unkey transmit 
-    }
-    else if (cw_on)  // Key up
-    {
-       Serial.println("Key up");
-       // Silence
-        
-       cli(); 
-       noTone(CW_TONE); 
-       last_cw = now;
-       sei();
-       si5351.output_enable(SI5351_CLK1, 0); // Unkey transmit 
-       
-    }
-   */
 }  
 
 
 // Interrupt service routine -- Analogue Pins
 ISR (PCINT1_vect) // handle pin change interrupt for A0 to A5 here
 {
-    Serial.println("Interrupt Service Routine - analogue\n");
+    //Serial.println("Interrupt Service Routine - analogue\n");
+    need_update = 1;
 }  
 
  
@@ -663,6 +631,8 @@ void setup()
   pinMode(FBUTTON_1, INPUT);
   digitalWrite(FBUTTON_1, HIGH);
   pciSetup(FBUTTON_1);
+  pciSetup(SMETER);
+  pciSetup(ANALOG_TUNING);
 
   pinMode(CW_KEY_DOT, INPUT_PULLUP);
   pinMode(CW_KEY_DASH, INPUT_PULLUP); 
@@ -687,7 +657,9 @@ void setup()
   si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
   si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLB);
   Serial.println("*Fixed PLL\n");  
-  //si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA);
+  si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA);
+  //si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA);
+  
   si5351.output_enable(SI5351_CLK0, 0);
   si5351.output_enable(SI5351_CLK1, 0);
   si5351.output_enable(SI5351_CLK2, 1);
@@ -701,17 +673,29 @@ void setup()
 
 void sk() {  //Straight Key mode
 
-  digitalWrite(TX_RX,HIGH);
+  digitalWrite(TX_RX, HIGH);
   
-  while (count < 2000) { // Delay time after last action to return to normal SSB
-    while(digitalRead(CW_KEY_DOT)==LOW){
-      si5351.set_freq((frequency-offset) * 100 , SI5351_CLK1); //Key down
-      tone(6,offset); //Sidetone     
-      count=0; //Reset counter
+  while (count < 500)  // Delay time after last action to return to normal SSB
+  {
+     while(digitalRead(CW_KEY_DOT)==LOW)
+     {
+        if (!started_cw_tone) 
+        {
+           si5351.set_freq((frequency-offset) * 100ULL , SI5351_CLK1); //Key down
+           tone(CW_TONE,offset); //Sidetone  
+           started_cw_tone = 1;
+        }
+        delay(2);   
+        count=0; //Reset counter
     }
-  
-    {si5351.output_enable(SI5351_CLK1, 0); // Unkey transmit
-     noTone(6);}  
+
+    if (started_cw_tone) 
+    {
+       si5351.output_enable(SI5351_CLK1, 0); // Unkey transmit
+       started_cw_tone = 0;
+       noTone(CW_TONE); 
+    }
+    delay(2);
     count++; 
   }
   count=0; //Reset counter
@@ -719,7 +703,7 @@ void sk() {  //Straight Key mode
 
 void loop()
 {
-   unsigned long now = millis();
+   //unsigned long now = millis();
    
 // Disable Calibration for now
 /*
@@ -737,45 +721,32 @@ void loop()
     return;
   }
   */
-/*
-  if ((cw_on) && (!started_cw_tone))
-  {
-     si5351.set_freq((frequency-offset) * 100ULL, SI5351_CLK1);
-     si5351.output_enable(SI5351_CLK2, 0);
-     started_cw_tone = 1;
-  }
 
-
-  // Have we finished CW ?  
-  if ((cw_on) && ((now - last_cw) > CW_TIMEOUT) && (digitalRead(CW_KEY_DOT) == HIGH))
-  {
-      // Switch off transmitter
-      cli();
-      digitalWrite(TX_RX, LOW);
-      Serial.println("CW off");
-      cw_on = 0;      
-      started_cw_tone = 0;
-      sei();
-      si5351.output_enable(SI5351_CLK2, 1);
-  } */
   
   if (digitalRead(CW_KEY_DOT) == LOW) 
   { 
-    si5351.output_enable(SI5351_CLK2, 0);
     cw_on = 1;
+    started_cw_tone = 0;
     updateDisplay();
     sk();
-    cw_on = 0;
   }
-  digitalWrite(TX_RX, LOW); // Restore T/R relays from CW mode
-  si5351.output_enable(SI5351_CLK2, 1);
+  if (cw_on)
+  {
+     digitalWrite(TX_RX, LOW); // Restore T/R relays from CW mode
+     cw_on = 0;
+  }
 
   if (!tuning_lock) doTuning();
 
   // Read signal level
   sm = logscale(analogRead(SMETER));  
   if (sm > peak_sm) peak_sm = sm;
-  updateDisplay();
+  
+  if (need_update)
+  {
+     updateDisplay();
+     need_update = 0;
+  }
   
   delay(50); 
 }

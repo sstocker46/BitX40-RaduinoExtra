@@ -110,16 +110,24 @@ void setupUpsideDown()
 {
   lcd.noDisplay();
   lcd.createChar(0, bar);
+  delay(5);
 #ifdef UPSIDE_DOWN
   // We'll reuse zero as is
   lcd.createChar(1, one);
+  delay(5);
   lcd.createChar(2, two);
+  delay(5);
   lcd.createChar(3, three);
+  delay(5);
   lcd.createChar(4, four);
+  delay(5);
   lcd.createChar(5, five);
+  delay(5);
   lcd.createChar(6, half_bar);
+  delay(5);
   // We can use an inverted 9 as a 6
   lcd.createChar(7, seven);
+  delay(5);
   // 8 can be used as is
   // We can use an inverted 6 as a 9
 

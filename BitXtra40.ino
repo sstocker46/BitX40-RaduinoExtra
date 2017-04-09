@@ -1,7 +1,7 @@
 #include <si5351.h>
 
 // Do we want the inverted display
-#define UPSIDE_DOWN 
+//#define UPSIDE_DOWN 
 
 /**
  * This source file is under General Public License version 3.
@@ -77,6 +77,7 @@ char serial_in[32], c[30], b[30], printBuff[32];
 int count = 0;
 int sm;  // Signal meter
 volatile int peak_sm = 0;
+int last_sm;
 int wpm = 18; // Read from a pot on Don's setup
 int p ;         //Timing period (milliseconds) for keyer function
 int offset=750; // CW offset
@@ -224,9 +225,10 @@ int  old_knob = 0;
 
 #define CW_TIMEOUT (750l)
 #define LOWEST_FREQ  (7000000l)
-#define HIGHEST_FREQ (7250000l)
+#define HIGHEST_FREQ (7210000l)
 
-long frequency, stepSize=100000;
+long frequency = 7100000l;
+long stepSize=100000;
 
 /**
  * The raduino can be booted into multiple modes:
@@ -602,6 +604,23 @@ void doTuning(){
   }
 }
 
+void doShuttleTuning()
+{
+    int knob = analogRead(ANALOG_TUNING);
+    long new_freq;
+
+    if ((knob > 560) && (frequency < HIGHEST_FREQ)) new_freq = frequency + (pow((knob - 560)/5,3)/100);
+    else if ((knob < 464) && ( frequency > LOWEST_FREQ)) new_freq = frequency - (pow((464 - knob)/5,3)/100);
+    else return;
+
+    if ((new_freq != frequency) && ((new_freq / 10) != (frequency / 10)))
+    {
+       setFrequency(new_freq);
+       updateDisplay();
+    }
+}
+
+
 /**
  * setup is called on boot up
  * It setups up the modes for various pins as inputs or outputs
@@ -736,17 +755,19 @@ void loop()
      cw_on = 0;
   }
 
-  if (!tuning_lock) doTuning();
+  if (!tuning_lock) doShuttleTuning();
 
   // Read signal level
   sm = logscale(analogRead(SMETER));  
   if (sm > peak_sm) peak_sm = sm;
   
-  if (need_update)
+  if ((need_update) || (sm != last_sm))
   {
      updateDisplay();
      need_update = 0;
   }
+
+  last_sm = sm;
   
   delay(50); 
 }

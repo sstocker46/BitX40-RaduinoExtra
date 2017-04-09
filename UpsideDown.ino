@@ -109,30 +109,32 @@ byte half_bar[8] = {
 void setupUpsideDown() 
 {
   lcd.noDisplay();
+  delay(15);
   lcd.createChar(0, bar);
-  delay(5);
+  delay(15);
 #ifdef UPSIDE_DOWN
   // We'll reuse zero as is
   lcd.createChar(1, one);
-  delay(5);
+  delay(15);
   lcd.createChar(2, two);
-  delay(5);
+  delay(15);
   lcd.createChar(3, three);
-  delay(5);
+  delay(15);
   lcd.createChar(4, four);
-  delay(5);
+  delay(15);
   lcd.createChar(5, five);
-  delay(5);
+  delay(15);
   lcd.createChar(6, half_bar);
-  delay(5);
+  delay(15);
   // We can use an inverted 9 as a 6
   lcd.createChar(7, seven);
-  delay(5);
+  delay(15);
   // 8 can be used as is
   // We can use an inverted 6 as a 9
 
 #else
   lcd.createChar(6, half_bar);
+  delay(15);
 #endif
   lcd.display();
 }

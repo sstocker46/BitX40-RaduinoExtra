@@ -3,8 +3,8 @@
 
 
 // Do we want the inverted display
-#define UPSIDE_DOWN 
-#define SHUTTLE_TUNE
+//#define UPSIDE_DOWN 
+//#define SHUTTLE_TUNE
 
 /**
  * This source file is under General Public License version 3.

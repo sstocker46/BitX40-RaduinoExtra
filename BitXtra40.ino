@@ -1,7 +1,10 @@
+#include <Wire.h>
 #include <si5351.h>
 
+
 // Do we want the inverted display
-//#define UPSIDE_DOWN 
+#define UPSIDE_DOWN 
+#define SHUTTLE_TUNE
 
 /**
  * This source file is under General Public License version 3.
@@ -39,9 +42,9 @@
  *  The Wire.h library is used to talk to the Si5351 and we also declare an instance of 
  *  Si5351 object to control the clocks.
  */
-#include <Wire.h>
-#include <si5351.h>
+
 Si5351 si5351;
+
 /** 
  * The Raduino board is the size of a standard 16x2 LCD panel. It has three connectors:
  * 
@@ -86,6 +89,7 @@ volatile int cw_on = 0;
 volatile int tuning_lock = 0;
 volatile unsigned long last_interrupt_time_digital = 0L;
 volatile unsigned int need_update = 0;
+volatile int scan = 0;
 
 unsigned char serial_in_count = 0;
 
@@ -143,6 +147,7 @@ unsigned char serial_in_count = 0;
 #define FBUTTON_1 (A3)
 #define CW_SPEED   (A6)
 #define ANALOG_TUNING (A7)
+#define SCAN_LEVEL 1
 
 /** 
  *  The second set of 16 pins on the bottom connector are have the three clock outputs and the digital lines to control the rig.
@@ -286,9 +291,9 @@ int logscale(int s)
  * indicator
  */
 
-void updateDisplay()
+void updateFrequency()
 {
-    int i, smi, smp;
+
     printFrequency(c, frequency);     
 
 #ifdef UPSIDE_DOWN
@@ -306,13 +311,18 @@ void updateDisplay()
 
     lcd.print("(");
     if (cw_on) lcd.print((char) 0xff);
+    else if (scan) lcd.print("S");
     else if (tuning_lock) lcd.print("+");
     else lcd.print(" ");
     lcd.print(")");
+}
 
+void updateSMeter()
+{
     // Signal meter
-    smi = sm / 2;
-    smp = peak_sm / 2;    
+    int i;
+    int smi = sm / 2;
+    int smp = peak_sm / 2;    
 #ifdef UPSIDE_DOWN
     lcd.setCursor(2,0);
     lcd.print("[");
@@ -340,6 +350,11 @@ void updateDisplay()
 #endif
 }
 
+void updateDisplay()
+{
+   updateFrequency();
+   updateSMeter();
+}
 
 // Install Pin change interrupt for a pin, can be called multiple times
  
@@ -359,8 +374,13 @@ ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
     // Function Button 2 is tuning lock - toggle
     if ((digitalRead(FBUTTON_2) == LOW) && ((now - last_interrupt_time_digital) > 50L))
     {
+#ifdef SHUTTLE_TUNE
+       if (scan) scan = 0;
+       else scan = 1;
+#else
        if (tuning_lock) tuning_lock = 0;
        else tuning_lock = 1;
+#endif
        peak_sm = 0;
        last_interrupt_time_digital = now;
        need_update = 1;
@@ -573,6 +593,24 @@ void checkButton(){
  * up or down in 10 Khz increments
  */
 
+
+#ifdef SHUTTLE_TUNE
+void doShuttleTuning()
+{
+    int knob = analogRead(ANALOG_TUNING);
+    long new_freq;
+
+    if ((knob > 560) && (frequency < HIGHEST_FREQ)) new_freq = frequency + (pow((knob - 560)/5,3)/100);
+    else if ((knob < 464) && ( frequency > LOWEST_FREQ)) new_freq = frequency - (pow((464 - knob)/5,3)/100);
+    else return;
+
+    if ((new_freq != frequency) && ((new_freq / 10) != (frequency / 10)))
+    {
+       setFrequency(new_freq);
+       updateDisplay();
+    }
+}
+#else
 void doTuning(){
  unsigned long newFreq;
  
@@ -603,22 +641,7 @@ void doTuning(){
      updateDisplay();
   }
 }
-
-void doShuttleTuning()
-{
-    int knob = analogRead(ANALOG_TUNING);
-    long new_freq;
-
-    if ((knob > 560) && (frequency < HIGHEST_FREQ)) new_freq = frequency + (pow((knob - 560)/5,3)/100);
-    else if ((knob < 464) && ( frequency > LOWEST_FREQ)) new_freq = frequency - (pow((464 - knob)/5,3)/100);
-    else return;
-
-    if ((new_freq != frequency) && ((new_freq / 10) != (frequency / 10)))
-    {
-       setFrequency(new_freq);
-       updateDisplay();
-    }
-}
+#endif
 
 
 /**
@@ -669,25 +692,26 @@ void setup()
   digitalWrite(TX_RX, LOW);
   delay(500);
 
+  /* Etherkit library */
+  
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 25000000l, 0);
-  
   Serial.println("*Initiliazed Si5351\n");
-  
   si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
   si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLB);
   Serial.println("*Fixed PLL\n");  
   si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA);
   //si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA);
-  
   si5351.output_enable(SI5351_CLK0, 0);
   si5351.output_enable(SI5351_CLK1, 0);
   si5351.output_enable(SI5351_CLK2, 1);
   Serial.println("*Output enabled PLL\n");
   si5351.set_freq(500000000l, SI5351_CLK2);   
   
+  
   Serial.println("*Si5350 ON\n");       
   mode = MODE_NORMAL;
   delay(10);
+  updateDisplay();
 }
 
 void sk() {  //Straight Key mode
@@ -754,18 +778,33 @@ void loop()
      digitalWrite(TX_RX, LOW); // Restore T/R relays from CW mode
      cw_on = 0;
   }
-
-  if (!tuning_lock) doShuttleTuning();
+#ifdef SHUTTLE_TUNE
+  if (scan)
+  {
+     if (frequency < HIGHEST_FREQ) setFrequency(frequency + 100);
+     else scan = 0;
+  }
+  else doShuttleTuning();
+  
+#else
+  if (!tuning_lock) doTuning();
+#endif
 
   // Read signal level
   sm = logscale(analogRead(SMETER));  
+  if ((scan) && (sm >= SCAN_LEVEL)) 
+  {
+     scan = 0;
+     need_update = 1;
+  }
   if (sm > peak_sm) peak_sm = sm;
   
-  if ((need_update) || (sm != last_sm))
+  if (need_update)
   {
      updateDisplay();
      need_update = 0;
   }
+  else if (sm != last_sm) updateSMeter();
 
   last_sm = sm;
   

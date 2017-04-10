@@ -1,5 +1,6 @@
 #include <Wire.h>
 #include <si5351.h>
+#include "UpsideDown.h"
 
 
 // Do we want the inverted display
@@ -658,7 +659,7 @@ void setup()
 {
   int32_t cal;
 
-  setupUpsideDown();
+  setupUpsideDown(&lcd);
   
   lcd.begin(16, 2);
   lcd.clear();

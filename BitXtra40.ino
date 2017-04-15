@@ -2,10 +2,8 @@
 #include <si5351.h>
 #include "UpsideDown.h"
 
-
-// Do we want the inverted display
-//#define UPSIDE_DOWN 
-//#define SHUTTLE_TUNE
+// Comment this line out if you want 'traditional' tuning and no scan option
+#define SHUTTLE_TUNE
 
 /**
  * This source file is under General Public License version 3.
@@ -80,6 +78,7 @@ LiquidCrystal lcd(8,9,10,11,12,13);
 char serial_in[32], c[30], b[30], printBuff[32];
 int count = 0;
 int sm;  // Signal meter
+int s_level;
 volatile int peak_sm = 0;
 int last_sm;
 int wpm = 18; // Read from a pot on Don's setup
@@ -265,23 +264,24 @@ void printLine2(char *c){
   lcd.print(c);
 }
 
-// returns a logarithmic scale from the raw signal voltage on the scale 0 - 23
+// returns a logarithmic scale from the raw signal voltage on the scale 0 - 19
 int logscale(int s)
 {
-   if (s <= 10) return s;
-   if (s <= 12) return 11;
-   if (s <= 15) return 12;
-   if (s <= 19) return 13;
-   if (s <= 23) return 14;
-   if (s <= 29) return 15;
-   if (s <= 37) return 16;
-   if (s <= 46) return 17;
-   if (s <= 58) return 18;
-   if (s <= 72) return 19;
-   if (s <= 91) return 20;
-   if (s <= 113) return 21;
-   if (s <= 142) return 22;
-   return 23;
+   if (s <= 5) return s;     
+   if (s <= 12) return 6;   
+   if (s <= 17) return 7;
+   if (s <= 23) return 8;
+   if (s <= 30) return 9;
+   if (s <= 37) return 10;
+   if (s <= 46) return 11;
+   if (s <= 55) return 12;
+   if (s <= 65) return 13;
+   if (s <= 77) return 14;
+   if (s <= 89) return 15;    
+   if (s <= 102) return 16;
+   if (s <= 116) return 17; 
+   if (s <= 132) return 18;  
+   return 19;
 }
 
 /**
@@ -321,13 +321,16 @@ void updateFrequency()
 void updateSMeter()
 {
     // Signal meter
+    
     int i;
     int smi = sm / 2;
-    int smp = peak_sm / 2;    
+    int smp = peak_sm / 2;  
+    printSignal(c, s_level);
+    
 #ifdef UPSIDE_DOWN
-    lcd.setCursor(2,0);
+    lcd.setCursor(0,0);
     lcd.print("[");
-    for (i=11; i>=smi+1; i--) 
+    for (i=9; i>=smi+1; i--) 
     {
        if (i == smp) lcd.print("|");
        else lcd.print(" ");
@@ -336,13 +339,17 @@ void updateSMeter()
     else lcd.print(" ");
     for (i=0; i<smi; i++) lcd.print((char) 0x0);
     lcd.print("]");
+    lcd.print(" ");
+    lcd.print(c);
 #else
     lcd.setCursor(0,1);
+    lcd.print(c);
+    lcd.print(" ");
     lcd.print("[");
     for (i=0; i<smi; i++) lcd.print((char) 0x0);
     if (sm%2==1) lcd.print((char) 0x6);
     else lcd.print(" ");
-    for (i=smi+1; i<12; i++) 
+    for (i=smi+1; i<10; i++) 
     {
        if (i == smp) lcd.print("|");
        else lcd.print(" ");
@@ -792,7 +799,13 @@ void loop()
 #endif
 
   // Read signal level
-  sm = logscale(analogRead(SMETER));  
+  int sma = analogRead(SMETER);
+  sm = logscale(sma); 
+  if (sma < 10) s_level = sm;
+  else if (sma < 80) s_level = 9;
+  else if (sma < 110) s_level = 10;
+  else s_level = 20;
+   
   if ((scan) && (sm >= SCAN_LEVEL)) 
   {
      scan = 0;

@@ -112,35 +112,37 @@ byte half_bar[8] = {
 
 void setupUpsideDown(LiquidCrystal * lcd) 
 {
+  cli();
   lcd->noDisplay();
-  delay(15);
+  delay(25);
   lcd->createChar(0, bar);
-  delay(15);
+  delay(25);
 #ifdef UPSIDE_DOWN
   // We'll reuse zero as is
   lcd->createChar(1, one);
-  delay(15);
+  delay(25);
   lcd->createChar(2, two);
-  delay(15);
+  delay(25);
   lcd->createChar(3, three);
-  delay(15);
+  delay(25);
   lcd->createChar(4, four);
-  delay(15);
+  delay(25);
   lcd->createChar(5, five);
-  delay(15);
+  delay(25);
   lcd->createChar(6, half_bar);
-  delay(15);
+  delay(25);
   // We can use an inverted 9 as a 6
   lcd->createChar(7, seven);
-  delay(15);
+  delay(25);
   // 8 can be used as is
   // We can use an inverted 6 as a 9
 
 #else
   lcd->createChar(6, half_bar);
-  delay(15);
+  delay(25);
 #endif
   lcd->display();
+  sei();
 }
 
 
@@ -150,7 +152,7 @@ void printFrequency(char * buffer, unsigned long f)
 {
    int i;
    char b[10];
-   sprintf(b, "%08ld", frequency); 
+   sprintf(b, "%7ld", frequency); 
    
 #ifdef UPSIDE_DOWN
    char br[9];
@@ -159,9 +161,21 @@ void printFrequency(char * buffer, unsigned long f)
        br[6-i] = number_chars[b[i]-48];
    }
    br[7] = 0;
-   sprintf(buffer, "%.5s%c%.2s", br, (char) 0b10100101,  br+5);
+   sprintf(buffer, "%.2s:%.3s%c%.1s", br+1, br+3, (char) 0b10100101,  br+6);
 #else
-   sprintf(buffer, "%.2s%c%.5s", b, (char) 0b10100101,  b+2);
+   sprintf(buffer, "%.1s%c%.3s:%.3s", b, (char) 0b10100101, b+1, b+4);
 #endif
 }
 
+
+void printSignal(char * buffer, int s)
+{   
+#ifdef UPSIDE_DOWN
+   if (s < 10) sprintf(buffer, "%cS ", number_chars[s]);
+   else if (s == 10) sprintf(buffer, "0%c+", number_chars[1]);
+   else sprintf(buffer, "0%c+", number_chars[2]);
+#else
+   if (s < 10) sprintf(buffer, " S%d", s);
+   else sprintf(buffer, "+%d", s);
+#endif
+}
